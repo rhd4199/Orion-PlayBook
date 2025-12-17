@@ -1,0 +1,640 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  displayName  String       @map("display_name")
+  status       String
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  roles        UserRole[]
+  auditLogs    AuditLog[]   @relation("UserAuditLogs")
+  characters   Character[]  @relation("UserCharacters")
+  campaignsOwned Campaign[] @relation("UserCampaignsOwned")
+  campaignMemberships CampaignMember[] @relation("UserCampaignMemberships")
+
+  @@map("users")
+}
+
+model Role {
+  id               String           @id @default(uuid()) @db.Uuid
+  name             String           @unique
+  userRoles        UserRole[]
+  rolePermissions  RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @db.Uuid @map("user_id")
+  roleId String @db.Uuid @map("role_id")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid @map("role_id")
+  permissionId String     @db.Uuid @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  actorUserId  String    @db.Uuid @map("actor_user_id")
+  action       String
+  entityType   String    @map("entity_type")
+  entityId     String    @map("entity_id")
+  beforeJson   Json?     @map("before_json")
+  afterJson    Json?     @map("after_json")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  actorUser    User      @relation("UserAuditLogs", fields: [actorUserId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Source {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String
+  name         String
+  licenseNote  String?  @map("license_note")
+
+  spells       Spell[]
+  classes      Class[]
+  subclasses   Subclass[]
+  features     Feature[]
+  feats        Feat[]
+  species      Species[]
+  backgrounds  Background[]
+  items        Item[]
+  monsters     Monster[]
+
+  @@map("sources")
+}
+
+model Tag {
+  id    String @id @default(uuid()) @db.Uuid
+  name  String
+  type  String
+
+  spellTags  SpellTag[]
+  itemTags   ItemTag[]
+
+  @@map("tags")
+}
+
+model RulesTerm {
+  id          String  @id @default(uuid()) @db.Uuid
+  kind        String
+  key         String
+  name        String
+  description String?
+
+  @@unique([kind, key])
+  @@map("rules_terms")
+}
+
+model Spell {
+  id                String       @id @default(uuid()) @db.Uuid
+  sourceId          String       @db.Uuid @map("source_id")
+  name              String
+  level             Int
+  school            String
+  castingTime       String       @map("casting_time")
+  range             String
+  componentsJson    Json         @map("components_json")
+  duration          String
+  concentrationBool Boolean      @map("concentration_bool")
+  ritualBool        Boolean      @map("ritual_bool")
+  descriptionMd     String       @map("description_md")
+
+  source    Source     @relation(fields: [sourceId], references: [id])
+  tags      SpellTag[]
+  scalings  SpellScaling[]
+  knownBy   CharacterSpellsKnown[] @relation("SpellKnown")
+  preparedBy CharacterSpellsPrepared[] @relation("SpellPrepared")
+
+  @@map("spells")
+}
+
+model SpellTag {
+  spellId String @db.Uuid @map("spell_id")
+  tagId   String @db.Uuid @map("tag_id")
+
+  spell Spell @relation(fields: [spellId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([spellId, tagId])
+  @@map("spell_tags")
+}
+
+model SpellScaling {
+  id          String @id @default(uuid()) @db.Uuid
+  spellId     String @db.Uuid @map("spell_id")
+  mode        String
+  scalingJson Json   @map("scaling_json")
+
+  spell Spell @relation(fields: [spellId], references: [id], onDelete: Cascade)
+
+  @@map("spell_scaling")
+}
+
+model Class {
+  id                     String @id @default(uuid()) @db.Uuid
+  sourceId               String @db.Uuid @map("source_id")
+  name                   String
+  hitDie                 Int    @map("hit_die")
+  primaryAbilitiesJson   Json   @map("primary_abilities_json")
+  proficienciesJson      Json   @map("proficiencies_json")
+
+  source      Source     @relation(fields: [sourceId], references: [id])
+  subclasses  Subclass[]
+  features    ClassFeature[]
+
+  characterClasses CharacterClass[]
+
+  @@map("classes")
+}
+
+model Subclass {
+  id        String @id @default(uuid()) @db.Uuid
+  classId   String @db.Uuid @map("class_id")
+  sourceId  String @db.Uuid @map("source_id")
+  name      String
+
+  class     Class  @relation(fields: [classId], references: [id])
+  source    Source @relation(fields: [sourceId], references: [id])
+  features  SubclassFeature[]
+
+  characterClasses CharacterClass[]
+
+  @@map("subclasses")
+}
+
+model Feature {
+  id            String @id @default(uuid()) @db.Uuid
+  sourceId      String @db.Uuid @map("source_id")
+  name          String
+  type          String
+  descriptionMd String @map("description_md")
+
+  source   Source @relation(fields: [sourceId], references: [id])
+  classes  ClassFeature[]
+  subclasses SubclassFeature[]
+
+  @@map("features")
+}
+
+model ClassFeature {
+  classId     String @db.Uuid @map("class_id")
+  featureId   String @db.Uuid @map("feature_id")
+  levelGained Int    @map("level_gained")
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([classId, featureId])
+  @@map("class_features")
+}
+
+model SubclassFeature {
+  subclassId   String @db.Uuid @map("subclass_id")
+  featureId    String @db.Uuid @map("feature_id")
+  levelGained  Int    @map("level_gained")
+
+  subclass Subclass @relation(fields: [subclassId], references: [id], onDelete: Cascade)
+  feature  Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([subclassId, featureId])
+  @@map("subclass_features")
+}
+
+model Feat {
+  id                 String @id @default(uuid()) @db.Uuid
+  sourceId           String @db.Uuid @map("source_id")
+  name               String
+  prerequisitesJson  Json   @map("prerequisites_json")
+  descriptionMd      String @map("description_md")
+
+  source Source @relation(fields: [sourceId], references: [id])
+
+  @@map("feats")
+}
+
+model Species {
+  id            String @id @default(uuid()) @db.Uuid
+  sourceId      String @db.Uuid @map("source_id")
+  name          String
+  size          String
+  speedJson     Json   @map("speed_json")
+  traitsJson    Json   @map("traits_json")
+  descriptionMd String @map("description_md")
+
+  source Source @relation(fields: [sourceId], references: [id])
+  characters Character[]
+
+  @@map("species")
+}
+
+model Background {
+  id                     String @id @default(uuid()) @db.Uuid
+  sourceId               String @db.Uuid @map("source_id")
+  name                   String
+  skillProficienciesJson Json   @map("skill_proficiencies_json")
+  toolProficienciesJson  Json   @map("tool_proficiencies_json")
+  languagesJson          Json   @map("languages_json")
+  featuresJson           Json   @map("features_json")
+
+  source Source @relation(fields: [sourceId], references: [id])
+  characters Character[]
+
+  @@map("backgrounds")
+}
+
+model Item {
+  id            String  @id @default(uuid()) @db.Uuid
+  sourceId      String  @db.Uuid @map("source_id")
+  name          String
+  category      String
+  rarity        String
+  costCp        Int     @map("cost_cp")
+  weight        Float?
+  descriptionMd String  @map("description_md")
+
+  source   Source  @relation(fields: [sourceId], references: [id])
+  weapon   Weapon?
+  armor    Armor?
+  tags     ItemTag[]
+  inventory CharacterInventory[]
+
+  @@map("items")
+}
+
+model Weapon {
+  itemId        String @id @db.Uuid @map("item_id")
+  weaponType    String @map("weapon_type")
+  damageDice    String @map("damage_dice")
+  damageType    String @map("damage_type")
+  propertiesJson Json  @map("properties_json")
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("weapons")
+}
+
+model Armor {
+  itemId                   String @id @db.Uuid @map("item_id")
+  armorType                String @map("armor_type")
+  acBase                   Int    @map("ac_base")
+  dexCap                   Int?   @map("dex_cap")
+  strReq                   Int?   @map("str_req")
+  stealthDisadvantageBool  Boolean @map("stealth_disadvantage_bool")
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("armors")
+}
+
+model ItemTag {
+  itemId String @db.Uuid @map("item_id")
+  tagId  String @db.Uuid @map("tag_id")
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@map("item_tags")
+}
+
+model Monster {
+  id                 String  @id @default(uuid()) @db.Uuid
+  sourceId           String  @db.Uuid @map("source_id")
+  name               String
+  size               String
+  type               String
+  alignment          String
+  ac                 Int
+  hp                 Int
+  speedJson          Json    @map("speed_json")
+  abilityScoresJson  Json    @map("ability_scores_json")
+  savesJson          Json    @map("saves_json")
+  skillsJson         Json    @map("skills_json")
+  sensesJson         Json    @map("senses_json")
+  languagesJson      Json    @map("languages_json")
+  cr                 Float
+  xp                 Int
+  traitsMd           String  @map("traits_md")
+  actionsMd          String  @map("actions_md")
+  legendaryActionsMd String? @map("legendary_actions_md")
+
+  source   Source         @relation(fields: [sourceId], references: [id])
+  actions  MonsterAction[]
+
+  @@map("monsters")
+}
+
+model MonsterAction {
+  id           String  @id @default(uuid()) @db.Uuid
+  monsterId    String  @db.Uuid @map("monster_id")
+  name         String
+  actionType   String  @map("action_type")
+  toHit        Int?
+  reachRange   String? @map("reach_range")
+  damageJson   Json?   @map("damage_json")
+  descriptionMd String @map("description_md")
+
+  monster Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+
+  @@map("monster_actions")
+}
+
+model Asset {
+  id       String @id @default(uuid()) @db.Uuid
+  kind     String
+  url      String
+  metaJson Json   @map("meta_json")
+
+  entityAssets EntityAsset[]
+
+  @@map("assets")
+}
+
+model EntityAsset {
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id")
+  assetId    String @db.Uuid @map("asset_id")
+  role       String
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([entityType, entityId, assetId, role])
+  @@map("entity_assets")
+}
+
+model I18nString {
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id")
+  field      String
+  locale     String
+  value      String
+
+  @@id([entityType, entityId, field, locale])
+  @@map("i18n_strings")
+}
+
+model Character {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid @map("user_id")
+  name         String
+  levelTotal   Int       @map("level_total")
+  speciesId    String    @db.Uuid @map("species_id")
+  backgroundId String    @db.Uuid @map("background_id")
+  alignment    String?
+  xp           Int       @default(0)
+  notesMd      String?   @map("notes_md")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user        User      @relation("UserCharacters", fields: [userId], references: [id])
+  species     Species   @relation(fields: [speciesId], references: [id])
+  background  Background @relation(fields: [backgroundId], references: [id])
+
+  abilities   CharacterAbilities?
+  classes     CharacterClass[]
+  proficiencies CharacterProficiency[]
+  inventory   CharacterInventory[]
+  spellsKnown CharacterSpellsKnown[]
+  spellsPrepared CharacterSpellsPrepared[]
+  resources   CharacterResource[]
+  choices     CharacterChoice[]
+
+  campaignCharacters CampaignCharacter[]
+
+  @@map("characters")
+}
+
+model CharacterAbilities {
+  characterId String  @id @db.Uuid @map("character_id")
+  str         Int
+  dex         Int
+  con         Int
+  int         Int
+  wis         Int
+  cha         Int
+  method      String
+  rawJson     Json    @map("raw_json")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@map("character_abilities")
+}
+
+model CharacterClass {
+  id                   String  @id @default(uuid()) @db.Uuid
+  characterId          String  @db.Uuid @map("character_id")
+  classId              String  @db.Uuid @map("class_id")
+  subclassId           String? @db.Uuid @map("subclass_id")
+  level                Int
+  hitPointsRollsJson   Json?   @map("hit_points_rolls_json")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  class     Class     @relation(fields: [classId], references: [id])
+  subclass  Subclass? @relation(fields: [subclassId], references: [id])
+
+  @@map("character_classes")
+}
+
+model CharacterProficiency {
+  id          String  @id @default(uuid()) @db.Uuid
+  characterId String  @db.Uuid @map("character_id")
+  kind        String
+  termKey     String  @map("term_key")
+  source      String
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@map("character_proficiencies")
+}
+
+model CharacterInventory {
+  id             String  @id @default(uuid()) @db.Uuid
+  characterId    String  @db.Uuid @map("character_id")
+  itemId         String  @db.Uuid @map("item_id")
+  qty            Int
+  equippedBool   Boolean @map("equipped_bool")
+  attunedBool    Boolean @map("attuned_bool")
+  customName     String? @map("custom_name")
+  customMetaJson Json?   @map("custom_meta_json")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id])
+
+  @@map("character_inventory")
+}
+
+model CharacterSpellsKnown {
+  id          String  @id @default(uuid()) @db.Uuid
+  characterId String  @db.Uuid @map("character_id")
+  spellId     String  @db.Uuid @map("spell_id")
+  source      String
+  notes       String?
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  spell     Spell     @relation("SpellKnown", fields: [spellId], references: [id])
+
+  @@map("character_spells_known")
+}
+
+model CharacterSpellsPrepared {
+  characterId  String  @db.Uuid @map("character_id")
+  spellId      String  @db.Uuid @map("spell_id")
+  preparedBool Boolean @map("prepared_bool")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  spell     Spell     @relation("SpellPrepared", fields: [spellId], references: [id])
+
+  @@id([characterId, spellId])
+  @@map("character_spells_prepared")
+}
+
+model CharacterResource {
+  id          String  @id @default(uuid()) @db.Uuid
+  characterId String  @db.Uuid @map("character_id")
+  key         String
+  current     Int
+  max         Int
+  metaJson    Json?   @map("meta_json")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@map("character_resources")
+}
+
+model Choice {
+  id          String  @id @default(uuid()) @db.Uuid
+  entityType  String  @map("entity_type")
+  entityId    String  @map("entity_id")
+  key         String
+  prompt      String?
+  optionsJson Json    @map("options_json")
+  rulesJson   Json?   @map("rules_json")
+
+  characterChoices CharacterChoice[]
+
+  @@map("choices")
+}
+
+model CharacterChoice {
+  id           String   @id @default(uuid()) @db.Uuid
+  characterId  String   @db.Uuid @map("character_id")
+  choiceId     String   @db.Uuid @map("choice_id")
+  selectedJson Json     @map("selected_json")
+  chosenAt     DateTime @default(now()) @map("chosen_at")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  choice    Choice    @relation(fields: [choiceId], references: [id], onDelete: Cascade)
+
+  @@map("character_choices")
+}
+
+model Campaign {
+  id           String  @id @default(uuid()) @db.Uuid
+  ownerUserId  String  @db.Uuid @map("owner_user_id")
+  name         String
+  setting      String?
+  notesMd      String? @map("notes_md")
+
+  owner     User             @relation("UserCampaignsOwned", fields: [ownerUserId], references: [id])
+  members   CampaignMember[]
+  characters CampaignCharacter[]
+  sessions  Session[]
+  encounters Encounter[]
+
+  @@map("campaigns")
+}
+
+model CampaignMember {
+  campaignId String @db.Uuid @map("campaign_id")
+  userId     String @db.Uuid @map("user_id")
+  role       String
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation("UserCampaignMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, userId])
+  @@map("campaign_members")
+}
+
+model CampaignCharacter {
+  campaignId String @db.Uuid @map("campaign_id")
+  characterId String @db.Uuid @map("character_id")
+
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, characterId])
+  @@map("campaign_characters")
+}
+
+model Session {
+  id          String   @id @default(uuid()) @db.Uuid
+  campaignId  String   @db.Uuid @map("campaign_id")
+  date        DateTime
+  summaryMd   String?  @map("summary_md")
+  notesMd     String?  @map("notes_md")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Encounter {
+  id         String  @id @default(uuid()) @db.Uuid
+  campaignId String  @db.Uuid @map("campaign_id")
+  name       String
+  state      String
+
+  campaign   Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  combatants EncounterCombatant[]
+
+  @@map("encounters")
+}
+
+model EncounterCombatant {
+  id            String  @id @default(uuid()) @db.Uuid
+  encounterId   String  @db.Uuid @map("encounter_id")
+  kind          String
+  refId         String  @map("ref_id")
+  initiative    Int
+  hpCurrent     Int     @map("hp_current")
+  conditionsJson Json?  @map("conditions_json")
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@map("encounter_combatants")
+}
